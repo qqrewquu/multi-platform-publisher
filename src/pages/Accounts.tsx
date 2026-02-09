@@ -28,11 +28,12 @@ const platformFilters: { id: PlatformType | "all"; label: string }[] = [
 ];
 
 export function Accounts() {
-  const { accounts, fetchAccounts, addAccount, removeAccount, openLogin, openPlatform } =
+  const { accounts, fetchAccounts, addAccount, removeAccount, openLogin, openPlatform, updateLoginStatus } =
     useAccountStore();
   const [activeFilter, setActiveFilter] = useState<PlatformType | "all">("all");
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [chromeFound, setChromeFound] = useState<boolean | null>(null);
+  const [loginPendingAccountId, setLoginPendingAccountId] = useState<number | null>(null);
 
   useEffect(() => {
     fetchAccounts();
@@ -169,11 +170,22 @@ export function Accounts() {
                 </div>
 
                 <div className="flex gap-2 pt-3 border-t border-border">
-                  <ActionButton
-                    icon={LogIn}
-                    label="登录"
-                    onClick={() => openLogin(account.id)}
-                  />
+                  {account.isLoggedIn ? (
+                    <ActionButton
+                      icon={CheckCircle}
+                      label="已登录"
+                      variant="success"
+                    />
+                  ) : (
+                    <ActionButton
+                      icon={LogIn}
+                      label="登录"
+                      onClick={async () => {
+                        await openLogin(account.id);
+                        setLoginPendingAccountId(account.id);
+                      }}
+                    />
+                  )}
                   <ActionButton
                     icon={ExternalLink}
                     label="打开"
@@ -204,6 +216,18 @@ export function Accounts() {
             await addAccount(platform, "");
             setShowAddDialog(false);
           }}
+        />
+      )}
+
+      {/* Login Confirmation Dialog */}
+      {loginPendingAccountId !== null && (
+        <LoginConfirmDialog
+          account={accounts.find((a) => a.id === loginPendingAccountId)}
+          onConfirm={async () => {
+            await updateLoginStatus(loginPendingAccountId, true);
+            setLoginPendingAccountId(null);
+          }}
+          onCancel={() => setLoginPendingAccountId(null)}
         />
       )}
     </div>
@@ -267,6 +291,66 @@ function AddAccountDialog({
   );
 }
 
+function LoginConfirmDialog({
+  account,
+  onConfirm,
+  onCancel,
+}: {
+  account: ReturnType<typeof useAccountStore.getState>["accounts"][0] | undefined;
+  onConfirm: () => Promise<void>;
+  onCancel: () => void;
+}) {
+  if (!account) return null;
+  const info = PLATFORMS[account.platform];
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+      <div className="bg-card border border-border rounded-2xl p-6 w-[420px] shadow-2xl">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold text-foreground">确认登录状态</h2>
+          <button
+            onClick={onCancel}
+            className="p-1 hover:bg-secondary rounded-lg transition-colors"
+          >
+            <X className="w-5 h-5 text-muted-foreground" />
+          </button>
+        </div>
+
+        <div className="flex items-center gap-3 p-3 bg-secondary/50 rounded-lg mb-4">
+          <Chrome className="w-8 h-8 text-primary shrink-0" />
+          <div>
+            <p className="text-sm font-medium text-foreground">
+              Chrome 已打开 {info.name}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              请在 Chrome 浏览器中完成扫码或密码登录
+            </p>
+          </div>
+        </div>
+
+        <p className="text-sm text-muted-foreground mb-5">
+          登录完成后，点击下方按钮确认。如果还没登录完成，可以先点「稍后确认」，之后在账号卡片上手动标记。
+        </p>
+
+        <div className="flex gap-3">
+          <button
+            onClick={onCancel}
+            className="flex-1 py-2.5 rounded-xl text-sm font-medium border border-border text-foreground hover:bg-secondary transition-colors"
+          >
+            稍后确认
+          </button>
+          <button
+            onClick={onConfirm}
+            className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-green-600 text-white hover:bg-green-700 transition-colors"
+          >
+            已完成登录
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ActionButton({
   icon: Icon,
   label,
@@ -275,7 +359,7 @@ function ActionButton({
 }: {
   icon: React.ComponentType<{ className?: string }>;
   label: string;
-  variant?: "default" | "destructive";
+  variant?: "default" | "destructive" | "success";
   onClick?: () => void;
 }) {
   return (
@@ -285,6 +369,8 @@ function ActionButton({
         "flex-1 inline-flex items-center justify-center gap-1 px-2 py-1.5 rounded-md text-xs transition-colors",
         variant === "destructive"
           ? "text-destructive hover:bg-destructive/10"
+          : variant === "success"
+          ? "text-green-600 dark:text-green-400"
           : "text-muted-foreground hover:bg-secondary hover:text-foreground"
       )}
     >

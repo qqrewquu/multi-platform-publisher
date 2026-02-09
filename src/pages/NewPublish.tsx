@@ -1,6 +1,7 @@
-import { useState, useCallback, useEffect, type KeyboardEvent, type DragEvent } from "react";
+import { useState, useCallback, useEffect, type KeyboardEvent } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { open } from "@tauri-apps/plugin-opener";
+import { open as openDialog } from "@tauri-apps/plugin-dialog";
+import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import {
   Upload,
   X,
@@ -52,31 +53,49 @@ export function NewPublish() {
 
   useEffect(() => {
     fetchAccounts();
-  }, []);
 
-  const handleDragOver = useCallback((e: DragEvent) => {
-    e.preventDefault();
-    setIsDragging(true);
-  }, []);
-
-  const handleDragLeave = useCallback((e: DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-  }, []);
-
-  const handleDrop = useCallback(
-    (e: DragEvent) => {
-      e.preventDefault();
-      setIsDragging(false);
-      const file = e.dataTransfer.files[0];
-      if (file && file.type.startsWith("video/")) {
-        // In Tauri, we need the full path. For drag-and-drop, we get the file name.
-        // The actual file path will be available through Tauri's file system APIs.
-        setVideoPath(file.name, file.name);
+    // Listen for native Tauri file drag-and-drop
+    const webview = getCurrentWebviewWindow();
+    const unlisten = webview.onDragDropEvent((event) => {
+      if (event.payload.type === "over") {
+        setIsDragging(true);
+      } else if (event.payload.type === "drop") {
+        setIsDragging(false);
+        const paths = event.payload.paths;
+        if (paths && paths.length > 0) {
+          const filePath = paths[0];
+          const ext = filePath.split(".").pop()?.toLowerCase() || "";
+          if (["mp4", "mov", "avi", "mkv", "webm", "flv"].includes(ext)) {
+            const fileName = filePath.split("/").pop() || filePath.split("\\").pop() || filePath;
+            setVideoPath(filePath, fileName);
+          }
+        }
+      } else if (event.payload.type === "leave" || event.payload.type === "cancel") {
+        setIsDragging(false);
       }
-    },
-    [setVideoPath]
-  );
+    });
+
+    return () => {
+      unlisten.then((fn) => fn());
+    };
+  }, []);
+
+  const handleClickUpload = async () => {
+    const selected = await openDialog({
+      multiple: false,
+      filters: [
+        {
+          name: "视频文件",
+          extensions: ["mp4", "mov", "avi", "mkv", "webm", "flv"],
+        },
+      ],
+    });
+    if (selected) {
+      const filePath = selected as string;
+      const fileName = filePath.split("/").pop() || filePath.split("\\").pop() || filePath;
+      setVideoPath(filePath, fileName);
+    }
+  };
 
   const handleTagKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" && tagInput.trim()) {
@@ -193,9 +212,7 @@ export function NewPublish() {
               </div>
             ) : (
               <div
-                onDragOver={handleDragOver}
-                onDragLeave={handleDragLeave}
-                onDrop={handleDrop}
+                onClick={handleClickUpload}
                 className={cn(
                   "border-2 border-dashed rounded-xl p-10 text-center transition-all cursor-pointer",
                   isDragging
