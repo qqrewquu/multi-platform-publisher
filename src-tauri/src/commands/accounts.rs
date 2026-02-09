@@ -106,7 +106,7 @@ pub fn open_platform(db: State<'_, Database>, account_id: i64) -> Result<(), Str
     let chrome_path = chrome::detect_chrome().map_err(|e| e.to_string())?;
     let profile_dir = std::path::PathBuf::from(&account.chrome_profile_dir);
 
-    chrome::launch_chrome(&chrome_path, &profile_dir, &platform_info.upload_url, 0)
+    chrome::launch_chrome_with_debug(&chrome_path, &profile_dir, &platform_info.upload_url)
         .map_err(|e| e.to_string())?;
 
     Ok(())

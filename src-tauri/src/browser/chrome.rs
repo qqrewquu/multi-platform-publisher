@@ -1,11 +1,19 @@
 use anyhow::{Context, Result, bail};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Child};
+use std::sync::atomic::{AtomicU16, Ordering};
 use log::info;
+
+/// Port counter for allocating unique debugging ports
+static NEXT_PORT: AtomicU16 = AtomicU16::new(9300);
+
+/// Allocate a unique debugging port
+pub fn allocate_port() -> u16 {
+    NEXT_PORT.fetch_add(1, Ordering::SeqCst)
+}
 
 /// Detect Chrome installation path on the current OS
 pub fn detect_chrome() -> Result<PathBuf> {
-    // macOS paths
     #[cfg(target_os = "macos")]
     {
         let paths = [
@@ -15,17 +23,14 @@ pub fn detect_chrome() -> Result<PathBuf> {
         for p in &paths {
             let path = PathBuf::from(p);
             if path.exists() {
-                info!("Found Chrome at: {}", path.display());
                 return Ok(path);
             }
         }
-        // Try which
         if let Ok(path) = which::which("google-chrome") {
             return Ok(path);
         }
     }
 
-    // Windows paths
     #[cfg(target_os = "windows")]
     {
         let paths = [
@@ -35,23 +40,19 @@ pub fn detect_chrome() -> Result<PathBuf> {
         for p in &paths {
             let path = PathBuf::from(p);
             if path.exists() {
-                info!("Found Chrome at: {}", path.display());
                 return Ok(path);
             }
         }
-        // Try PATH
         if let Ok(path) = which::which("chrome") {
             return Ok(path);
         }
     }
 
-    // Linux paths
     #[cfg(target_os = "linux")]
     {
         let names = ["google-chrome", "google-chrome-stable", "chromium-browser", "chromium"];
         for name in &names {
             if let Ok(path) = which::which(name) {
-                info!("Found Chrome at: {}", path.display());
                 return Ok(path);
             }
         }
@@ -73,7 +74,6 @@ pub fn create_profile_dir(platform: &str, account_index: u32) -> Result<PathBuf>
     let base = get_profiles_base_dir()?;
     let profile_dir = base.join(format!("{}-{}", platform, account_index));
     std::fs::create_dir_all(&profile_dir)?;
-    info!("Created Chrome profile at: {}", profile_dir.display());
     Ok(profile_dir)
 }
 
@@ -96,65 +96,65 @@ pub fn next_profile_index(platform: &str) -> Result<u32> {
     Ok(max_index + 1)
 }
 
-/// Launch Chrome browser with a specific profile and navigate to a URL
-pub fn launch_chrome(
+/// Launch Chrome with a debugging port and return (Child, port)
+pub fn launch_chrome_with_debug(
     chrome_path: &Path,
     profile_dir: &Path,
     url: &str,
-    debugging_port: u16,
-) -> Result<Child> {
+) -> Result<(Child, u16)> {
+    let port = allocate_port();
+
     let child = Command::new(chrome_path)
         .arg(format!("--user-data-dir={}", profile_dir.display()))
-        .arg(format!("--remote-debugging-port={}", debugging_port))
+        .arg(format!("--remote-debugging-port={}", port))
         .arg("--no-first-run")
         .arg("--no-default-browser-check")
         .arg("--disable-default-apps")
+        .arg("--disable-background-timer-throttling")
+        .arg("--disable-backgrounding-occluded-windows")
+        .arg("--disable-renderer-backgrounding")
         .arg(format!("--window-size={},{}", 1280, 800))
         .arg(url)
         .spawn()
         .context("Failed to launch Chrome")?;
 
-    info!("Launched Chrome (PID: {}) with profile: {}", child.id(), profile_dir.display());
-    Ok(child)
+    info!("Launched Chrome (PID: {}, port: {}) profile: {}", child.id(), port, profile_dir.display());
+    Ok((child, port))
 }
 
-/// Launch Chrome for login (visible mode, no headless)
+/// Launch Chrome for login (no automation needed)
 pub fn launch_chrome_for_login(
     chrome_path: &Path,
     profile_dir: &Path,
     login_url: &str,
 ) -> Result<Child> {
-    // Use port 0 to auto-select, or a fixed range based on profile
-    let port = 9222; // We'll use different ports for concurrent sessions later
-    launch_chrome(chrome_path, profile_dir, login_url, port)
+    let (child, _port) = launch_chrome_with_debug(chrome_path, profile_dir, login_url)?;
+    Ok(child)
 }
 
-/// Launch Chrome for publishing (can be visible or headless based on settings)
-pub fn launch_chrome_for_publish(
-    chrome_path: &Path,
-    profile_dir: &Path,
-    upload_url: &str,
-    visible: bool,
-) -> Result<Child> {
-    let port = 9223;
-    if visible {
-        launch_chrome(chrome_path, profile_dir, upload_url, port)
-    } else {
-        // Headless mode for automatic publishing
-        let child = Command::new(chrome_path)
-            .arg(format!("--user-data-dir={}", profile_dir.display()))
-            .arg(format!("--remote-debugging-port={}", port))
-            .arg("--no-first-run")
-            .arg("--no-default-browser-check")
-            .arg("--disable-default-apps")
-            .arg("--headless=new")
-            .arg(format!("--window-size={},{}", 1280, 800))
-            .arg(upload_url)
-            .spawn()
-            .context("Failed to launch Chrome in headless mode")?;
+/// Wait for Chrome debugging endpoint to be ready
+pub async fn wait_for_chrome_ready(port: u16, timeout_secs: u64) -> Result<String> {
+    let url = format!("http://127.0.0.1:{}/json/version", port);
+    let start = std::time::Instant::now();
+    let timeout = std::time::Duration::from_secs(timeout_secs);
 
-        info!("Launched Chrome headless (PID: {})", child.id());
-        Ok(child)
+    loop {
+        if start.elapsed() > timeout {
+            bail!("Chrome did not become ready within {} seconds on port {}", timeout_secs, port);
+        }
+
+        match reqwest::get(&url).await {
+            Ok(resp) => {
+                if resp.status().is_success() {
+                    let body = resp.text().await.unwrap_or_default();
+                    info!("Chrome is ready on port {}", port);
+                    return Ok(body);
+                }
+            }
+            Err(_) => {}
+        }
+
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
     }
 }
 
