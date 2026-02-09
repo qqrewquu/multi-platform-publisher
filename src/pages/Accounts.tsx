@@ -1,5 +1,17 @@
-import { useState } from "react";
-import { Plus, RefreshCw, ExternalLink, Pencil, Trash2 } from "lucide-react";
+import { useState, useEffect } from "react";
+import { invoke } from "@tauri-apps/api/core";
+import {
+  Plus,
+  RefreshCw,
+  ExternalLink,
+  Pencil,
+  Trash2,
+  LogIn,
+  Chrome,
+  CheckCircle,
+  AlertCircle,
+  X,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAccountStore } from "@/stores/accountStore";
 import { PlatformIcon, PlatformBadge } from "@/components/PlatformIcon";
@@ -16,8 +28,19 @@ const platformFilters: { id: PlatformType | "all"; label: string }[] = [
 ];
 
 export function Accounts() {
-  const { accounts, removeAccount } = useAccountStore();
+  const { accounts, fetchAccounts, addAccount, removeAccount, openLogin, openPlatform } =
+    useAccountStore();
   const [activeFilter, setActiveFilter] = useState<PlatformType | "all">("all");
+  const [showAddDialog, setShowAddDialog] = useState(false);
+  const [chromeFound, setChromeFound] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    fetchAccounts();
+    // Check Chrome installation
+    invoke<{ found: boolean }>("detect_chrome").then((res) => {
+      setChromeFound(res.found);
+    });
+  }, []);
 
   const filteredAccounts =
     activeFilter === "all"
@@ -26,6 +49,24 @@ export function Accounts() {
 
   return (
     <div className="p-8 max-w-5xl mx-auto">
+      {/* Chrome Status Banner */}
+      {chromeFound === false && (
+        <div className="mb-4 p-3 bg-destructive/10 border border-destructive/20 rounded-lg flex items-center gap-2">
+          <AlertCircle className="w-4 h-4 text-destructive shrink-0" />
+          <p className="text-sm text-destructive">
+            未检测到 Chrome 浏览器，请先安装 Google Chrome
+          </p>
+        </div>
+      )}
+      {chromeFound === true && (
+        <div className="mb-4 p-3 bg-green-500/10 border border-green-500/20 rounded-lg flex items-center gap-2">
+          <Chrome className="w-4 h-4 text-green-600 dark:text-green-400 shrink-0" />
+          <p className="text-sm text-green-600 dark:text-green-400">
+            Chrome 浏览器已就绪
+          </p>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
@@ -35,13 +76,19 @@ export function Accounts() {
           </p>
         </div>
         <div className="flex gap-2">
-          <button className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:opacity-90 transition-opacity">
+          <button
+            onClick={() => setShowAddDialog(true)}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:opacity-90 transition-opacity"
+          >
             <Plus className="w-4 h-4" />
             添加账号
           </button>
-          <button className="inline-flex items-center gap-2 px-4 py-2 bg-secondary text-secondary-foreground rounded-lg text-sm font-medium hover:bg-accent transition-colors border border-border">
+          <button
+            onClick={fetchAccounts}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-secondary text-secondary-foreground rounded-lg text-sm font-medium hover:bg-accent transition-colors border border-border"
+          >
             <RefreshCw className="w-4 h-4" />
-            状态检查
+            刷新
           </button>
         </div>
       </div>
@@ -78,10 +125,11 @@ export function Accounts() {
       {/* Account Cards Grid */}
       {filteredAccounts.length === 0 ? (
         <div className="bg-card border border-border rounded-xl p-12 text-center">
-          <p className="text-muted-foreground">该平台暂无账号</p>
-          <button className="mt-3 text-sm text-primary hover:text-primary/80 transition-colors">
-            添加账号
-          </button>
+          <p className="text-muted-foreground">
+            {accounts.length === 0
+              ? "还没有添加账号，点击上方「添加账号」开始"
+              : "该平台暂无账号"}
+          </p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -90,15 +138,12 @@ export function Accounts() {
             return (
               <div
                 key={account.id}
-                className="bg-card border border-border rounded-xl p-5 hover:border-primary/30 transition-colors group"
+                className="bg-card border border-border rounded-xl p-5 hover:border-primary/30 transition-colors"
               >
-                {/* Top Row: Icon + Info */}
                 <div className="flex items-start gap-3 mb-4">
                   <PlatformIcon platform={account.platform} size="lg" />
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <PlatformBadge platform={account.platform} />
-                    </div>
+                    <PlatformBadge platform={account.platform} />
                     <p className="text-sm font-medium text-foreground mt-1 truncate">
                       {account.displayName}
                     </p>
@@ -117,28 +162,32 @@ export function Accounts() {
                             : "text-amber-600 dark:text-amber-400"
                         )}
                       >
-                        {account.isLoggedIn ? "已登录" : "需要重新登录"}
+                        {account.isLoggedIn ? "已登录" : "需要登录"}
                       </span>
                     </div>
                   </div>
                 </div>
 
-                {/* Actions */}
                 <div className="flex gap-2 pt-3 border-t border-border">
+                  <ActionButton
+                    icon={LogIn}
+                    label="登录"
+                    onClick={() => openLogin(account.id)}
+                  />
                   <ActionButton
                     icon={ExternalLink}
                     label="打开"
-                    onClick={() =>
-                      window.open(info.creatorUrl, "_blank")
-                    }
+                    onClick={() => openPlatform(account.id)}
                   />
-                  <ActionButton icon={Pencil} label="编辑" />
-                  <ActionButton icon={RefreshCw} label="检查状态" />
                   <ActionButton
                     icon={Trash2}
                     label="删除"
                     variant="destructive"
-                    onClick={() => removeAccount(account.id)}
+                    onClick={() => {
+                      if (confirm("确定要删除此账号吗？Chrome 登录数据也会被清除。")) {
+                        removeAccount(account.id);
+                      }
+                    }}
                   />
                 </div>
               </div>
@@ -146,6 +195,74 @@ export function Accounts() {
           })}
         </div>
       )}
+
+      {/* Add Account Dialog */}
+      {showAddDialog && (
+        <AddAccountDialog
+          onClose={() => setShowAddDialog(false)}
+          onAdd={async (platform) => {
+            await addAccount(platform, "");
+            setShowAddDialog(false);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function AddAccountDialog({
+  onClose,
+  onAdd,
+}: {
+  onClose: () => void;
+  onAdd: (platform: PlatformType) => Promise<void>;
+}) {
+  const platforms: PlatformType[] = [
+    "douyin",
+    "xiaohongshu",
+    "bilibili",
+    "wechat",
+    "youtube",
+  ];
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+      <div className="bg-card border border-border rounded-2xl p-6 w-[400px] shadow-2xl">
+        <div className="flex items-center justify-between mb-5">
+          <h2 className="text-lg font-semibold text-foreground">添加账号</h2>
+          <button
+            onClick={onClose}
+            className="p-1 hover:bg-secondary rounded-lg transition-colors"
+          >
+            <X className="w-5 h-5 text-muted-foreground" />
+          </button>
+        </div>
+        <p className="text-sm text-muted-foreground mb-4">
+          选择平台，将打开 Chrome 浏览器让你登录
+        </p>
+        <div className="space-y-2">
+          {platforms.map((platform) => {
+            const info = PLATFORMS[platform];
+            return (
+              <button
+                key={platform}
+                onClick={() => onAdd(platform)}
+                className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-secondary transition-colors text-left"
+              >
+                <PlatformIcon platform={platform} size="md" />
+                <div>
+                  <p className="text-sm font-medium text-foreground">
+                    {info.name}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {info.creatorUrl}
+                  </p>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }
