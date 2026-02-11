@@ -15,11 +15,17 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             // Initialize database in app data directory
-            let app_data_dir = app.path().app_data_dir().expect("Failed to get app data dir");
+            let app_data_dir = app
+                .path()
+                .app_data_dir()
+                .expect("Failed to get app data dir");
             let db = Database::new(&app_data_dir).expect("Failed to initialize database");
             app.manage(db);
 
-            log::info!("MultiPublisher initialized. DB at: {}", app_data_dir.display());
+            log::info!(
+                "MultiPublisher initialized. DB at: {}",
+                app_data_dir.display()
+            );
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

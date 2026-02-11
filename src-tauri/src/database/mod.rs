@@ -1,10 +1,10 @@
-pub mod schema;
 pub mod queries;
+pub mod schema;
 
+use anyhow::Result;
 use rusqlite::Connection;
 use std::path::PathBuf;
 use std::sync::Mutex;
-use anyhow::Result;
 
 pub struct Database {
     pub conn: Mutex<Connection>,

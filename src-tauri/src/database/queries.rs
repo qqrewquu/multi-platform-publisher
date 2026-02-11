@@ -1,6 +1,6 @@
+use anyhow::Result;
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
-use anyhow::Result;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Account {
@@ -43,7 +43,12 @@ pub struct TaskPlatform {
 
 // ========== Account Queries ==========
 
-pub fn insert_account(conn: &Connection, platform: &str, display_name: &str, chrome_profile_dir: &str) -> Result<i64> {
+pub fn insert_account(
+    conn: &Connection,
+    platform: &str,
+    display_name: &str,
+    chrome_profile_dir: &str,
+) -> Result<i64> {
     conn.execute(
         "INSERT INTO accounts (platform, display_name, chrome_profile_dir) VALUES (?1, ?2, ?3)",
         params![platform, display_name, chrome_profile_dir],
@@ -55,18 +60,20 @@ pub fn get_all_accounts(conn: &Connection) -> Result<Vec<Account>> {
     let mut stmt = conn.prepare(
         "SELECT id, platform, display_name, avatar_url, chrome_profile_dir, is_logged_in, last_checked_at, created_at FROM accounts ORDER BY created_at DESC"
     )?;
-    let accounts = stmt.query_map([], |row| {
-        Ok(Account {
-            id: row.get(0)?,
-            platform: row.get(1)?,
-            display_name: row.get(2)?,
-            avatar_url: row.get(3)?,
-            chrome_profile_dir: row.get(4)?,
-            is_logged_in: row.get(5)?,
-            last_checked_at: row.get(6)?,
-            created_at: row.get(7)?,
-        })
-    })?.collect::<std::result::Result<Vec<_>, _>>()?;
+    let accounts = stmt
+        .query_map([], |row| {
+            Ok(Account {
+                id: row.get(0)?,
+                platform: row.get(1)?,
+                display_name: row.get(2)?,
+                avatar_url: row.get(3)?,
+                chrome_profile_dir: row.get(4)?,
+                is_logged_in: row.get(5)?,
+                last_checked_at: row.get(6)?,
+                created_at: row.get(7)?,
+            })
+        })?
+        .collect::<std::result::Result<Vec<_>, _>>()?;
     Ok(accounts)
 }
 
@@ -123,7 +130,12 @@ pub fn insert_task_platform(conn: &Connection, task_id: i64, account_id: i64) ->
     Ok(conn.last_insert_rowid())
 }
 
-pub fn update_task_platform_status(conn: &Connection, id: i64, status: &str, error_message: Option<&str>) -> Result<()> {
+pub fn update_task_platform_status(
+    conn: &Connection,
+    id: i64,
+    status: &str,
+    error_message: Option<&str>,
+) -> Result<()> {
     if status == "published" {
         conn.execute(
             "UPDATE publish_task_platforms SET status = ?1, published_at = datetime('now') WHERE id = ?2",
@@ -150,19 +162,21 @@ pub fn get_all_tasks(conn: &Connection) -> Result<Vec<PublishTask>> {
     let mut stmt = conn.prepare(
         "SELECT id, video_path, title, description, tags, cover_path, is_original, status, scheduled_at, created_at FROM publish_tasks ORDER BY created_at DESC"
     )?;
-    let tasks = stmt.query_map([], |row| {
-        Ok(PublishTask {
-            id: row.get(0)?,
-            video_path: row.get(1)?,
-            title: row.get(2)?,
-            description: row.get(3)?,
-            tags: row.get(4)?,
-            cover_path: row.get(5)?,
-            is_original: row.get(6)?,
-            status: row.get(7)?,
-            scheduled_at: row.get(8)?,
-            created_at: row.get(9)?,
-        })
-    })?.collect::<std::result::Result<Vec<_>, _>>()?;
+    let tasks = stmt
+        .query_map([], |row| {
+            Ok(PublishTask {
+                id: row.get(0)?,
+                video_path: row.get(1)?,
+                title: row.get(2)?,
+                description: row.get(3)?,
+                tags: row.get(4)?,
+                cover_path: row.get(5)?,
+                is_original: row.get(6)?,
+                status: row.get(7)?,
+                scheduled_at: row.get(8)?,
+                created_at: row.get(9)?,
+            })
+        })?
+        .collect::<std::result::Result<Vec<_>, _>>()?;
     Ok(tasks)
 }

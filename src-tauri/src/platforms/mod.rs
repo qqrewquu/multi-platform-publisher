@@ -1,8 +1,9 @@
-pub mod traits;
+mod common;
 pub mod bilibili;
 pub mod douyin;
-pub mod xiaohongshu;
+pub mod traits;
 pub mod wechat;
+pub mod xiaohongshu;
 pub mod youtube;
 
 pub use traits::PlatformInfo;

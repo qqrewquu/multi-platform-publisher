@@ -4,7 +4,6 @@ import {
   Plus,
   RefreshCw,
   ExternalLink,
-  Pencil,
   Trash2,
   LogIn,
   Chrome,
@@ -135,7 +134,6 @@ export function Accounts() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredAccounts.map((account) => {
-            const info = PLATFORMS[account.platform];
             return (
               <div
                 key={account.id}

@@ -39,7 +39,7 @@ interface AccountStore {
   updateLoginStatus: (id: number, isLoggedIn: boolean) => Promise<void>;
 }
 
-export const useAccountStore = create<AccountStore>((set, get) => ({
+export const useAccountStore = create<AccountStore>((set) => ({
   accounts: [],
   loading: false,
   error: null,

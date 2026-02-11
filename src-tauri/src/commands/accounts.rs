@@ -1,6 +1,6 @@
 use crate::browser::chrome;
-use crate::database::Database;
 use crate::database::queries;
+use crate::database::Database;
 use crate::platforms;
 use tauri::State;
 
@@ -11,7 +11,11 @@ pub fn get_accounts(db: State<'_, Database>) -> Result<Vec<queries::Account>, St
 }
 
 #[tauri::command]
-pub fn add_account(db: State<'_, Database>, platform: String, display_name: String) -> Result<queries::Account, String> {
+pub fn add_account(
+    db: State<'_, Database>,
+    platform: String,
+    display_name: String,
+) -> Result<queries::Account, String> {
     // Validate platform
     let platform_info = platforms::get_platform_info(&platform)
         .ok_or_else(|| format!("Unknown platform: {}", platform))?;
@@ -59,9 +63,14 @@ pub fn delete_account(db: State<'_, Database>, account_id: i64) -> Result<(), St
 }
 
 #[tauri::command]
-pub fn update_account_name(db: State<'_, Database>, account_id: i64, display_name: String) -> Result<(), String> {
+pub fn update_account_name(
+    db: State<'_, Database>,
+    account_id: i64,
+    display_name: String,
+) -> Result<(), String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
-    queries::update_account_display_name(&conn, account_id, &display_name).map_err(|e| e.to_string())
+    queries::update_account_display_name(&conn, account_id, &display_name)
+        .map_err(|e| e.to_string())
 }
 
 /// Launch Chrome for the user to log in to a platform
@@ -71,7 +80,8 @@ pub fn open_login(db: State<'_, Database>, account_id: i64) -> Result<(), String
 
     // Get account info
     let accounts = queries::get_all_accounts(&conn).map_err(|e| e.to_string())?;
-    let account = accounts.iter()
+    let account = accounts
+        .iter()
         .find(|a| a.id == account_id)
         .ok_or_else(|| format!("Account {} not found", account_id))?;
 
@@ -96,7 +106,8 @@ pub fn open_platform(db: State<'_, Database>, account_id: i64) -> Result<(), Str
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
 
     let accounts = queries::get_all_accounts(&conn).map_err(|e| e.to_string())?;
-    let account = accounts.iter()
+    let account = accounts
+        .iter()
         .find(|a| a.id == account_id)
         .ok_or_else(|| format!("Account {} not found", account_id))?;
 
@@ -114,8 +125,11 @@ pub fn open_platform(db: State<'_, Database>, account_id: i64) -> Result<(), Str
 
 /// Update login status for an account (check if cookies are still valid)
 #[tauri::command]
-pub fn update_login_status(db: State<'_, Database>, account_id: i64, is_logged_in: bool) -> Result<(), String> {
+pub fn update_login_status(
+    db: State<'_, Database>,
+    account_id: i64,
+    is_logged_in: bool,
+) -> Result<(), String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
-    queries::update_account_login_status(&conn, account_id, is_logged_in)
-        .map_err(|e| e.to_string())
+    queries::update_account_login_status(&conn, account_id, is_logged_in).map_err(|e| e.to_string())
 }
