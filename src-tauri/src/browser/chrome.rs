@@ -1,5 +1,5 @@
 use anyhow::{bail, Context, Result};
-use log::info;
+use log::{info, warn};
 use serde::Deserialize;
 use std::collections::BTreeSet;
 use std::net::TcpListener;
@@ -267,19 +267,10 @@ pub async fn wait_for_chrome_ready(
     let start = std::time::Instant::now();
     let timeout = std::time::Duration::from_secs(timeout_secs);
     let mut active_port = session.port;
-    let mut saw_version = false;
     let mut rediscovered_once = false;
 
     loop {
         if start.elapsed() > timeout {
-            if saw_version {
-                bail!(
-                    "PROFILE_BUSY: Chrome 调试端口 {} 可访问，但在 {} 秒内没有可操作页面。请先关闭该账号已打开的 Chrome 窗口后重试。",
-                    active_port,
-                    timeout_secs
-                );
-            }
-
             if is_profile_busy(profile_dir) {
                 bail!(
                     "PROFILE_BUSY: 检测到该账号 Chrome 会话被占用且无法附加（端口 {}）。请先关闭该账号已打开的 Chrome 窗口后重试。",
@@ -298,28 +289,27 @@ pub async fn wait_for_chrome_ready(
         match reqwest::get(&version_url).await {
             Ok(resp) => {
                 if resp.status().is_success() {
-                    saw_version = true;
                     match has_page_target(active_port).await {
                         Ok(true) => {
                             info!(
-                                "Chrome is ready on port {} (version endpoint + page target ready)",
+                                "Chrome is ready on port {} (ready_kind=version_page_target)",
                                 active_port
                             );
-                            return Ok(active_port);
                         }
                         Ok(false) => {
-                            info!(
-                                "Chrome version endpoint ready on port {}, waiting for page target...",
+                            warn!(
+                                "Chrome version endpoint ready on port {} but no page target yet (ready_kind=version_only)",
                                 active_port
                             );
                         }
                         Err(e) => {
-                            info!(
-                                "Chrome version endpoint ready on port {}, page target check failed: {}",
+                            warn!(
+                                "Chrome version endpoint ready on port {}, page target check failed (ready_kind=version_only): {}",
                                 active_port, e
                             );
                         }
                     }
+                    return Ok(active_port);
                 }
             }
             Err(_) => {}

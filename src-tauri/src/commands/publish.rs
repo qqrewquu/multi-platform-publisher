@@ -2,7 +2,7 @@ use crate::browser::{automation, chrome};
 use crate::database::queries;
 use crate::database::Database;
 use crate::platforms;
-use log::{info, warn};
+use log::info;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::time::Instant;
@@ -44,6 +44,11 @@ const ACTION_HINT_AUTOMATION_TIMEOUT: &str = "上传可能已开始，请在 Chr
 const ACTION_HINT_TARGET_PAGE_NOT_FOUND: &str =
     "未定位到目标平台上传页，已尝试新开窗口。请在 Chrome 打开对应平台上传页后重试。";
 const ACTION_HINT_TARGET_PAGE_NOT_READY: &str = "页面未完成加载，请等待页面稳定后重试。";
+const ACTION_HINT_LOGIN_REQUIRED: &str = "请先在 Chrome 完成微信扫码登录，再重试上传。";
+const ACTION_HINT_WECHAT_CHOOSER_NOT_OPENED: &str =
+    "微信上传入口暂不可交互，已多轮重试仍未触发文件选择器。请稍等页面稳定后重试。";
+const ACTION_HINT_WECHAT_UPLOAD_SIGNAL_TIMEOUT: &str =
+    "微信已完成文件注入，但未观测到上传信号。请在 Chrome 页面确认是否已开始上传。";
 const AUTOMATION_TIMEOUT_SECS: u64 = 45;
 
 #[derive(Debug, Clone)]
@@ -286,7 +291,7 @@ pub async fn create_publish_task(
 
 /// Run platform-specific automation via CDP
 async fn automate_platform(
-    chrome_path: &Path,
+    _chrome_path: &Path,
     session: &chrome::ChromeSession,
     profile_dir: &Path,
     platform: &str,
@@ -318,27 +323,6 @@ async fn automate_platform(
         ready_port,
         session.mode.as_str()
     );
-
-    if session.mode == chrome::ChromeSessionMode::ReusedExisting {
-        info!(
-            "[Session] reused existing session, request opening target upload URL in new window. platform={} profile={} port={} url={}",
-            platform,
-            profile_dir.display(),
-            ready_port,
-            upload_url
-        );
-        if let Err(e) = chrome::open_url_in_profile_new_window(chrome_path, profile_dir, upload_url)
-        {
-            warn!(
-                "[Session] failed to request new window for reused session: platform={} profile={} port={} url={} error={}",
-                platform,
-                profile_dir.display(),
-                ready_port,
-                upload_url,
-                e
-            );
-        }
-    }
 
     // Connect via CDP
     let cdp_connect_start = Instant::now();
@@ -411,6 +395,9 @@ fn normalize_platform_error(raw: String) -> String {
     let upper = raw.to_uppercase();
     if upper.contains("TARGET_PAGE_NOT_FOUND")
         || upper.contains("TARGET_PAGE_NOT_READY")
+        || upper.contains("LOGIN_REQUIRED")
+        || upper.contains("WECHAT_CHOOSER_NOT_OPENED")
+        || upper.contains("WECHAT_UPLOAD_SIGNAL_TIMEOUT")
         || upper.contains("PROFILE_BUSY")
         || upper.contains("CDP_NO_PAGE")
         || upper.contains("CHROME_NOT_READY")
@@ -445,6 +432,24 @@ fn classify_error(raw: &str) -> (&'static str, Option<String>) {
         return (
             "TARGET_PAGE_NOT_READY",
             Some(ACTION_HINT_TARGET_PAGE_NOT_READY.to_string()),
+        );
+    }
+    if upper.contains("LOGIN_REQUIRED") {
+        return (
+            "LOGIN_REQUIRED",
+            Some(ACTION_HINT_LOGIN_REQUIRED.to_string()),
+        );
+    }
+    if upper.contains("WECHAT_CHOOSER_NOT_OPENED") {
+        return (
+            "WECHAT_CHOOSER_NOT_OPENED",
+            Some(ACTION_HINT_WECHAT_CHOOSER_NOT_OPENED.to_string()),
+        );
+    }
+    if upper.contains("WECHAT_UPLOAD_SIGNAL_TIMEOUT") {
+        return (
+            "WECHAT_UPLOAD_SIGNAL_TIMEOUT",
+            Some(ACTION_HINT_WECHAT_UPLOAD_SIGNAL_TIMEOUT.to_string()),
         );
     }
     if upper.contains("PROFILE_BUSY") {
@@ -491,6 +496,9 @@ fn strip_error_code_prefix(raw: &str) -> String {
     let candidates = [
         "TARGET_PAGE_NOT_FOUND:",
         "TARGET_PAGE_NOT_READY:",
+        "LOGIN_REQUIRED:",
+        "WECHAT_CHOOSER_NOT_OPENED:",
+        "WECHAT_UPLOAD_SIGNAL_TIMEOUT:",
         "PROFILE_BUSY:",
         "CDP_NO_PAGE:",
         "CHROME_NOT_READY:",

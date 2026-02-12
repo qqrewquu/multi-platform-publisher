@@ -497,6 +497,12 @@ function resolveActionHint(task: PlatformTaskResult): string | null {
   if (task.error_code === "TARGET_PAGE_NOT_READY") {
     return "页面未完成加载，请等待页面稳定后重试";
   }
+  if (task.error_code === "WECHAT_CHOOSER_NOT_OPENED") {
+    return "微信上传入口暂不可交互，已多轮重试仍未触发文件选择器。请稍等页面稳定后重试";
+  }
+  if (task.error_code === "WECHAT_UPLOAD_SIGNAL_TIMEOUT") {
+    return "微信已完成文件注入，但未观测到上传信号。请在 Chrome 页面确认是否已开始上传";
+  }
   if (task.error_code === "AUTOMATION_TIMEOUT") {
     return "上传可能已开始，请在 Chrome 页面继续并重试提交";
   }

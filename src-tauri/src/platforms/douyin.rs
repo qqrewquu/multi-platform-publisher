@@ -34,6 +34,7 @@ const DOUYIN_CONFIG: PlatformPublishConfig = PlatformPublishConfig {
         "div[class*='upload-btn']",
         "div[class*='content-upload']",
     ],
+    pre_click_selectors: &[],
     click_selectors: &[
         "button[class*='upload']",
         "div[class*='upload-btn']",
@@ -41,6 +42,14 @@ const DOUYIN_CONFIG: PlatformPublishConfig = PlatformPublishConfig {
         "[data-e2e*='upload']",
         "[class*='drag']",
     ],
+    click_text_markers: &["上传视频", "点击上传", "选择文件", "更换视频"],
+    require_surface_ready: true,
+    fill_failure_is_error: true,
+    weak_ready_self_heal: false,
+    weak_ready_min_body_text_len: 0,
+    blocked_text_markers: &[],
+    init_text_markers: &[],
+    login_text_markers: &[],
     title_selectors: &[
         "input[placeholder*='标题']",
         "input[placeholder*='title']",

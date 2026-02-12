@@ -27,6 +27,7 @@ const XIAOHONGSHU_CONFIG: PlatformPublishConfig = PlatformPublishConfig {
         "[class*='drop']",
         "[class*='content-upload']",
     ],
+    pre_click_selectors: &[],
     click_selectors: &[
         "button[class*='upload']",
         "[class*='upload-btn']",
@@ -34,6 +35,14 @@ const XIAOHONGSHU_CONFIG: PlatformPublishConfig = PlatformPublishConfig {
         "[data-testid*='upload']",
         "[role='button']",
     ],
+    click_text_markers: &["上传视频", "点击上传", "选择文件", "拖拽"],
+    require_surface_ready: true,
+    fill_failure_is_error: true,
+    weak_ready_self_heal: false,
+    weak_ready_min_body_text_len: 0,
+    blocked_text_markers: &[],
+    init_text_markers: &[],
+    login_text_markers: &[],
     title_selectors: &[
         "input[placeholder*='标题']",
         "input[placeholder*='添加标题']",
